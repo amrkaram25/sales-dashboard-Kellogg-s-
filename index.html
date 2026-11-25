@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales Performance Dashboard</title>
+
+  <!-- Vendor CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/css/dataTables.bootstrap5.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-grid.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/styles/ag-theme-alpine.css">
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Loading spinner -->
+<div id="loader"><div class="loader-box"><div class="spinner-border text-info" role="status"></div><div id="loaderMsg">Loading…</div></div></div>
+<div id="dropOverlay"><div><i class="bi bi-cloud-arrow-up-fill"></i><h3>Drop file to replace current data</h3></div></div>
+<div id="toastHost" class="toast-container"></div>
+
+<!-- ============================ HEADER ============================ -->
+<header class="app-header no-export">
+  <div class="brand">
+    <div class="brand-logo"><img src="assets/logo.png" alt="Company logo"></div>
+    <div><div class="brand-title">Sales Performance Dashboard</div><div class="brand-sub" id="ctxLabel">Upload a sales file to begin</div></div>
+  </div>
+  <nav class="navpills d-none d-xl-flex" aria-label="Sections">
+    <a href="#sec-overview">Overview</a><a href="#sec-trend">Trends</a><a href="#sec-people">People</a><a href="#sec-customers">Customers</a><a href="#sec-products">Products</a><a href="#sec-data">Data</a>
+  </nav>
+  <div class="header-actions">
+    <div id="appHeaderActions" class="d-none d-flex gap-2 align-items-center">
+      <button class="btn btn-hdr" id="btnUpload" title="Upload a new file"><i class="bi bi-cloud-arrow-up"></i><span class="d-none d-lg-inline"> Upload</span></button>
+      <button class="btn btn-hdr" id="btnShare" title="Create view-only share data"><i class="bi bi-share"></i><span class="d-none d-lg-inline"> Share</span></button>
+      <button class="btn btn-hdr" id="btnRefresh" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+      <button class="btn btn-hdr" id="btnReset" title="Reset filters"><i class="bi bi-funnel"></i><span class="d-none d-lg-inline"> Reset</span></button>
+      <div class="dropdown">
+        <button class="btn btn-hdr" data-bs-toggle="dropdown" title="Export"><i class="bi bi-download"></i><span class="d-none d-lg-inline"> Export</span></button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><button class="dropdown-item" id="expPdf"><i class="bi bi-filetype-pdf me-2"></i>Dashboard PDF</button></li>
+          <li><button class="dropdown-item" id="expPng"><i class="bi bi-file-image me-2"></i>Dashboard PNG</button></li>
+          <li><button class="dropdown-item" id="expXlsx"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Summary Excel</button></li>
+        </ul>
+      </div>
+      <button class="btn btn-hdr" id="btnPrint" title="Print mode"><i class="bi bi-printer"></i></button>
+      <button class="btn btn-hdr" id="btnFullscreen" title="Fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
+    </div>
+    <button class="btn btn-hdr" id="btnTheme" title="Dark / light mode"><i class="bi bi-sun-fill"></i></button>
+  </div>
+</header>
+
+<main class="container-fluid app-main" id="dashboardRoot">
+
+  <div id="libError" class="alert alert-danger d-none"></div>
+
+  <!-- ============================ UPLOAD HERO ============================ -->
+  <section id="heroUpload" class="hero no-export">
+    <div class="dropzone" id="dropzone" tabindex="0">
+      <img class="dz-logo" src="assets/logo.png" alt="Company logo">
+      <div class="dz-icon"><i class="bi bi-cloud-arrow-up-fill"></i></div>
+      <h2>Drag &amp; drop your sales file here</h2>
+      <p>or <button type="button" class="btn btn-info btn-sm px-3" id="btnBrowse">Browse files</button></p>
+      <div class="dz-types"><span>.xlsx</span><span>.xls</span><span>.xlsb</span><span>.csv</span></div>
+      <p class="dz-hint">Columns are detected automatically (title rows above the header are fine). Everything refreshes instantly - no code changes needed.</p>
+      <div class="dz-links"><a href="#" class="js-template"><i class="bi bi-file-earmark-arrow-down"></i> Download template</a><span>·</span><a href="#" id="btnDemo" role="button"><i class="bi bi-play-circle"></i> Try demo data</a></div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsb,.xlsm,.csv,.ods" hidden>
+    </div>
+    <div id="uploadError" class="alert alert-danger mt-3 d-none"></div>
+  </section>
+
+  <!-- ============================ DASHBOARD ============================ -->
+  <div id="dash" class="d-none">
+
+    <!-- File info + validation -->
+    <div class="info-row">
+      <div class="file-info" id="fileInfo"></div>
+      <div class="val-banner d-none" id="validationBanner">
+        <i class="bi bi-shield-check"></i><span id="valCount"></span><span class="val-sum" id="valSummary"></span>
+        <button class="btn btn-sm btn-outline-light" id="btnValDetails">View details</button>
+      </div>
+    </div>
+
+    <!-- Global filters -->
+    <section class="glass filters no-export-sticky" id="filters">
+      <div class="filter-grid">
+        <div class="ms date-block">
+          <label class="ms-label"><i class="bi bi-calendar3"></i> Invoice Date</label>
+          <div class="date-row">
+            <input type="date" id="fDateFrom" class="form-control form-control-sm" aria-label="From">
+            <span>→</span>
+            <input type="date" id="fDateTo" class="form-control form-control-sm" aria-label="To">
+            <select id="fPreset" class="form-select form-select-sm" aria-label="Preset">
+              <option value="all">All dates</option><option value="mtd">Month to date</option><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option><option value="custom" hidden>Custom</option>
+            </select>
+          </div>
+        </div>
+        <div id="filterHost" class="filter-host"></div>
+      </div>
+      <div class="chip-row"><div id="chipHost"></div><div class="ms-auto small text-muted-c"><span id="rowCount"></span></div></div>
+      <div id="filterWarn" class="small text-warning-c d-none"><i class="bi bi-info-circle"></i> A Material filter is active: targets are set per customer/division (not per product), so target values are excluded for this selection.</div>
+    </section>
+
+    <!-- ============================ OVERVIEW ============================ -->
+    <section id="sec-overview">
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="row g-3 mt-0">
+        <div class="col-12 col-xl-3 col-md-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-speedometer2"></i> Achievement Gauge</h3>
+            <div class="gauge-wrap"><canvas id="chGauge"></canvas>
+              <div class="gauge-center"><div id="gaugeVal">-</div><div id="gaugeStatus"></div></div></div>
+            <div class="gauge-legend"><span><i style="background:#ef4444"></i>0-75</span><span><i style="background:#fb923c"></i>75-90</span><span><i style="background:#facc15"></i>90-100</span><span><i style="background:#10b981"></i>100-150%</span></div>
+            <div id="trafficLights" class="traffic"></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-5 col-md-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-stars"></i> Executive Summary</h3>
+            <div class="ins-grid" id="insightGrid"></div>
+            <ul class="narrative" id="narrative"></ul>
+          </div>
+        </div>
+        <div class="col-12 col-xl-4">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-traffic-cone"></i> Status Overview</h3>
+            <div id="trafficTable"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-0">
+        <div class="col-12 col-xl-7">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-bar-chart-line"></i> Sales vs Target by Division <small>Columns: sales &amp; target · Line: achievement %</small></h3>
+            <div class="chart-box h320"><canvas id="chDivision"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-5">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-pie-chart"></i> Category Contribution <small>Division share %</small></h3>
+            <div class="chart-box h320"><canvas id="chDonut"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ TRENDS & FORECAST ============================ -->
+    <section id="sec-trend">
+      <div class="row g-3">
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-graph-up"></i> Daily Sales Trend <small>GSV · 7-day moving average · run-rate forecast</small></h3>
+            <div class="chart-box h340"><canvas id="chDaily"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-rocket-takeoff"></i> Monthly Achievement Pace <small>Burn-up vs target &amp; required pace</small></h3>
+            <div class="chart-box h340"><div id="plotBurn" class="plot"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass card-pad mt-3">
+        <h3 class="card-title"><i class="bi bi-calendar2-check"></i> Forecast Engine <small id="fcNote"></small></h3>
+        <div class="row g-3">
+          <div class="col-12 col-xl-5">
+            <div class="fc-grid">
+              <div class="fc"><div class="fc-l">Month-End Forecast</div><div class="fc-v" id="fcSales">-</div></div>
+              <div class="fc"><div class="fc-l">Expected Achievement %</div><div class="fc-v" id="fcAch">-</div></div>
+              <div class="fc"><div class="fc-l">Required Daily Sales</div><div class="fc-v" id="fcReq">-</div><div class="fc-s" id="fcReqSub"></div></div>
+              <div class="fc"><div class="fc-l" id="fcGapLbl">Gap To Target</div><div class="fc-v" id="fcGap">-</div></div>
+              <div class="fc"><div class="fc-l">Forecast Status</div><div class="fc-v fc-status" id="fcStatus">-</div></div>
+              <div class="fc"><div class="fc-l">Forecast Confidence</div><div class="conf"><div class="conf-fill" id="fcConfBar"></div></div><div class="fc-s" id="fcConfTxt"></div></div>
+            </div>
+          </div>
+          <div class="col-12 col-xl-7">
+            <div class="chart-box h300"><canvas id="chForecast"></canvas></div>
+          </div>
+          <div class="col-12"><div class="table-responsive dt-wrap"><table id="tblForecast" class="table table-sm w-100"></table></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ PEOPLE ============================ -->
+    <section id="sec-people">
+      <div class="row g-3">
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-person-badge"></i> Executive Ranking
+              <span class="seg ms-auto"><button data-rank="ach" class="active">Achievement %</button><button data-rank="sales">Sales</button></span></h3>
+            <div class="legend-note"><i class="dot dot-green"></i>Top 3 <i class="dot dot-red ms-2"></i>Bottom 3 · click a bar to cross-filter</div>
+            <div class="chart-box h460"><canvas id="chExec"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-trophy"></i> Sales League Table
+              <span class="tools ms-auto"><input type="search" id="qLeague" class="form-control form-control-sm" placeholder="Search…">
+                <button class="btn btn-sm btn-tool" data-grid="gridLeague" data-fmt="csv"><i class="bi bi-filetype-csv"></i></button>
+                <button class="btn btn-sm btn-tool" data-grid="gridLeague" data-fmt="xlsx"><i class="bi bi-file-earmark-excel"></i></button></span></h3>
+            <div id="gridLeague" class="grid-host h460"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-0">
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-person-check"></i> Supervisor Performance <small>Sales · target · achievement %</small></h3>
+            <div class="chart-box h340"><canvas id="chSup"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-person-gear"></i> Manager Performance <small>KT Manager vs KL Manager</small></h3>
+            <div class="row g-2">
+              <div class="col-12 col-md-6"><div class="sub-title">KT Manager</div><div class="chart-box h300"><canvas id="chMgrKT"></canvas></div></div>
+              <div class="col-12 col-md-6"><div class="sub-title">KL Manager</div><div class="chart-box h300"><canvas id="chMgrKL"></canvas></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ CUSTOMERS ============================ -->
+    <section id="sec-customers">
+      <div class="row g-3">
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-shop"></i> Top 10 Customers <small>Sales · contribution % · invoices</small></h3>
+            <div class="chart-box h400"><canvas id="chCust"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="glass card-pad h-100">
+            <h3 class="card-title"><i class="bi bi-diagram-3"></i> Pareto Analysis <small>80/20 customer rule</small></h3>
+            <div class="chart-box h400"><div id="plotPareto" class="plot"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="glass card-pad mt-3">
+        <h3 class="card-title"><i class="bi bi-people"></i> Customer Analytics
+          <span class="tools ms-auto"><input type="search" id="qCust" class="form-control form-control-sm" placeholder="Search customers…">
+            <button class="btn btn-sm btn-tool" data-grid="gridCust" data-fmt="csv"><i class="bi bi-filetype-csv"></i></button>
+            <button class="btn btn-sm btn-tool" data-grid="gridCust" data-fmt="xlsx"><i class="bi bi-file-earmark-excel"></i></button></span></h3>
+        <div class="mini-grid" id="custStats"></div>
+        <div class="row g-3 my-1">
+          <div class="col-md-6"><div class="rank-box good"><h4><i class="bi bi-arrow-up-circle-fill"></i> Top Customers</h4><ol id="custTop"></ol></div></div>
+          <div class="col-md-6"><div class="rank-box bad"><h4><i class="bi bi-arrow-down-circle-fill"></i> Bottom Customers</h4><ol id="custBottom"></ol></div></div>
+        </div>
+        <div id="gridCust" class="grid-host h460"></div>
+      </div>
+    </section>
+
+    <!-- ============================ PRODUCTS ============================ -->
+    <section id="sec-products">
+      <div class="glass card-pad">
+        <h3 class="card-title"><i class="bi bi-box-seam"></i> Top 10 Products <small>Sales · quantity · contribution %</small>
+          <span class="seg ms-auto"><button data-prod="sales" class="active">Top By Sales</button><button data-prod="qty">Top By Quantity</button></span></h3>
+        <div class="chart-box h400"><canvas id="chProd"></canvas></div>
+      </div>
+      <div class="glass card-pad mt-3">
+        <h3 class="card-title"><i class="bi bi-boxes"></i> Product Analytics
+          <span class="tools ms-auto"><input type="search" id="qProd" class="form-control form-control-sm" placeholder="Search products…">
+            <button class="btn btn-sm btn-tool" data-grid="gridProd" data-fmt="csv"><i class="bi bi-filetype-csv"></i></button>
+            <button class="btn btn-sm btn-tool" data-grid="gridProd" data-fmt="xlsx"><i class="bi bi-file-earmark-excel"></i></button></span></h3>
+        <div class="mini-grid" id="prodStats"></div>
+        <div class="row g-3 my-1">
+          <div class="col-md-6"><div class="rank-box good"><h4><i class="bi bi-arrow-up-circle-fill"></i> Top Products</h4><ol id="prodTop"></ol></div></div>
+          <div class="col-md-6"><div class="rank-box bad"><h4><i class="bi bi-arrow-down-circle-fill"></i> Bottom Products</h4><ol id="prodBottom"></ol></div></div>
+        </div>
+        <div id="gridProd" class="grid-host h460"></div>
+      </div>
+    </section>
+
+    <!-- ============================ DATA ============================ -->
+    <section id="sec-data">
+      <div class="glass card-pad no-print">
+        <h3 class="card-title"><i class="bi bi-table"></i> Filtered Detail Data
+          <span class="tools ms-auto"><input type="search" id="qRaw" class="form-control form-control-sm" placeholder="Search rows…">
+            <button class="btn btn-sm btn-tool" data-grid="gridRaw" data-fmt="csv"><i class="bi bi-filetype-csv"></i></button>
+            <button class="btn btn-sm btn-tool" data-grid="gridRaw" data-fmt="xlsx"><i class="bi bi-file-earmark-excel"></i></button></span></h3>
+        <div id="gridRaw" class="grid-host h500"></div>
+      </div>
+      <div class="foot text-center">Sales Performance Dashboard · <a href="#" class="js-template">Download upload template</a></div>
+    </section>
+  </div>
+</main>
+
+<!-- Share modal -->
+<div class="modal fade" id="shareModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-share me-2"></i>View-only share</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <p><b>share-data.js</b> (<span id="shareSize"></span>) was downloaded. It contains the current data.</p>
+      <ol class="small">
+        <li>Copy the whole dashboard folder and give the copy a new name (do <b>not</b> put the file in your working copy).</li>
+        <li>Put <b>share-data.js</b> inside that copy, next to <b>index.html</b>.</li>
+        <li>Upload the copy to a static host (e.g. drag the folder onto <b>Netlify Drop</b>). You get a new link each time.</li>
+        <li>Send the link: viewers see the dashboard only, with no upload controls.</li>
+      </ol>
+      <div class="small text-muted-c">Anyone with the link can view it, and the data is inside the files, so share it only with people allowed to see it.</div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Validation modal -->
+<div class="modal fade" id="valModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Data Validation &amp; Cleaning Log</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><table id="tblValidation" class="table table-sm w-100"></table></div>
+  </div></div>
+</div>
+
+<!-- Vendor JS -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@2.35.2/plotly-basic.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<!-- Optional: view-only dataset (created by the Share button). Missing file is fine. -->
+<script src="share-data.js"></script>
+
+<!-- Application JS (order matters) -->
+<script src="js/dataProcessor.js"></script>
+<script src="js/kpiEngine.js"></script>
+<script src="js/filterEngine.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/exportEngine.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>
